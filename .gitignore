@@ -1,0 +1,10 @@
+.terraform*
+
+*.tfstate
+*.tfstate.backup
+*import.tf
+*back
+
+*.log
+.idea
+.DS_Store
