@@ -3,6 +3,17 @@ locals {
   transit_gateway_id = "tgw-051aafe0af89ad9cb" # 185236431346
 }
 
+data "terraform_remote_state" "uwst2-vpc" {
+  backend = "s3"
+  config = {
+    bucket = "jobis-data-ai-stg-tfstate"
+    key    = "common/uwst2-vpc.tfstate"
+    region = "ap-northeast-2"
+  }
+}
+
+data "aws_caller_identity" "current" {}
+
 module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
 
@@ -62,4 +73,54 @@ resource "aws_route" "prv-subnet-jobis-data-stg-dev" {
   route_table_id         = module.vpc.private_route_table_ids[0]
   destination_cidr_block = "10.10.17.0/24" # jobis-data-stg dev
   transit_gateway_id     = local.transit_gateway_id
+}
+
+resource "aws_vpc_peering_connection" "data-ai-us-west-2-peer" {
+  peer_owner_id = data.aws_caller_identity.current.account_id
+  vpc_id        = module.vpc.vpc_id
+  peer_vpc_id   = data.terraform_remote_state.uwst2-vpc.outputs.vpc_id
+  peer_region   = "us-west-2"
+  auto_accept   = false
+}
+
+provider "aws" {
+  alias  = "peer"
+  region = "us-west-2"
+
+  # Accepter's credentials.
+}
+
+
+resource "aws_vpc_peering_connection_accepter" "peer" {
+  provider                  = aws.peer
+  vpc_peering_connection_id = aws_vpc_peering_connection.data-ai-us-west-2-peer.id
+  auto_accept               = true
+
+  tags = {
+    Side = "Accepter"
+  }
+}
+
+resource "aws_vpc_peering_connection_options" "requester" {
+  vpc_peering_connection_id = aws_vpc_peering_connection_accepter.peer.id
+
+  requester {
+    allow_remote_vpc_dns_resolution = true
+  }
+}
+
+resource "aws_vpc_peering_connection_options" "accepter" {
+  provider = aws.peer
+
+  vpc_peering_connection_id = aws_vpc_peering_connection_accepter.peer.id
+
+  accepter {
+    allow_remote_vpc_dns_resolution = true
+  }
+}
+
+resource "aws_route" "uwst2-route" {
+  route_table_id            = module.vpc.private_route_table_ids[0]
+  destination_cidr_block    = "10.53.0.0/16"
+  vpc_peering_connection_id = aws_vpc_peering_connection.data-ai-us-west-2-peer.id
 }
