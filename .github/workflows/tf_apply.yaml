@@ -1,0 +1,60 @@
+name: Terraform apply
+on:
+  push:
+    branches:
+      - main
+jobs:
+  format-hcl:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Fail on malformatted files
+        uses: devops-infra/action-format-hcl@v0.3.6
+        with:
+          list: true
+          write: false
+          check: true
+          recursive: true
+  tf-apply:
+    concurrency: aws-jobis-data-ai-stg-tf
+    runs-on: [tfwork]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Run changed-files with dir_names
+        id: changed-files-dir-names
+        uses: tj-actions/changed-files@v40
+        with:
+          dir_names: "true"
+          dir_names_deleted_files_include_only_deleted_dirs: "true"
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::010438501597:role/github-runner-tfwork-role
+          role-session-name: ghe-ci-tfwork
+          aws-region: ap-northeast-2
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_wrapper: false
+      - uses: shmokmt/actions-setup-tfcmt@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Install terragrunt
+        run: |
+          wget https://github.com/gruntwork-io/terragrunt/releases/download/v0.57.13/terragrunt_linux_amd64
+          mv ./terragrunt_linux_amd64 ./terragrunt
+          chmod u+x ./terragrunt
+      - name: Run terragrunt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export TERRAGRUNT_TFPATH=tofu
+          TF_INCLUDE=""
+          for folder in ${{ steps.changed-files-dir-names.outputs.all_modified_files }}; do
+             TF_INCLUDE="$TF_INCLUDE --terragrunt-include-dir $folder"
+          done
+          echo $TF_INCLUDE
+          if [[ $TF_INCLUDE == "" ]]; then echo "no changes found." && exit 0; fi
+          ./terragrunt run-all apply  --terragrunt-non-interactive --terragrunt-tfpath $(pwd)/gha-tfwrapper.sh
