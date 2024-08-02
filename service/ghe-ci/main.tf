@@ -28,6 +28,7 @@ data "aws_iam_policy_document" "tfwork_deny_policy" {
     # ]
     not_actions = [
       "kms:Decrypt",
+      "ec2:*",
     ]
 
     resources = [
