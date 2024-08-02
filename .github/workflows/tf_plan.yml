@@ -18,7 +18,7 @@ jobs:
           check: true
           recursive: true
   tf-plan:
-    concurrency: tf-plan
+    concurrency: aws-jobis-data-ai-stg-tf
     runs-on: [tfwork]
     steps:
       - name: Checkout
