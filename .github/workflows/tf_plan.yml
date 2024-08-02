@@ -32,7 +32,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::778047397220:role/github-runner-tfwork-role
+          role-to-assume: arn:aws:iam::010438501597:role/github-runner-tfwork-role
           role-session-name: ghe-ci-tfwork
           aws-region: ap-northeast-2
       - uses: opentofu/setup-opentofu@v1
